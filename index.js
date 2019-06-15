@@ -1,25 +1,29 @@
-const states = {
+var states = {
   PENDING: 1,
   FULFILLED: 2,
 }
 
-function Promise(executor) {
-  let state = states.PENDING
-  let value = undefined
-  let callbacks = []
-  let resolve = function resolve(fulfilledValue) {
+function MyPromise(executor) {
+  var state = states.PENDING
+  var value = undefined
+  var callback = undefined
+  function resolve(fulfilledValue) {
     value = fulfilledValue
     state = states.FULFILLED
-    if (callbacks.length > 0) callbacks.pop()(value)
+    if (callback) callback(value)
   }
   executor(resolve)
 
-  let then = function then(callback) {
-    if (state === states.FULFILLED) {
-      callback(value)
-    } else {
-      callbacks.push(callback)
-    }
+  function then(givenCallback) {
+    return new MyPromise(newResolve => {
+      if (state === states.FULFILLED) {
+        newResolve(givenCallback(value))
+      } else {
+        callback = function chainedCallback(fulfilledValue) {
+          newResolve(givenCallback(fulfilledValue))
+        }
+      }
+    })
   }
 
   return {
@@ -40,24 +44,43 @@ function expect(value) {
 
 function test(name, callback) {
   console.log('Test: ' + name)
-  try {
-    callback()
-    console.log('\tSucceeded!')
-  } catch (e) {
-    console.log(e)
+  if (callback.then) {
+    callback.then(v => {
+      console.log('\tSucceeded!')
+    })
+  } else {
+    try {
+      callback()
+      console.log('\tSucceeded!')
+    } catch (e) {
+      console.log(e)
+    }
   }
 }
 
 function xtest() {}
 
 test('works with timeout', () => {
-  let p = new Promise(resolve => setTimeout(() => resolve('value'), 300))
+  var p = new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
   p.then(value => expect(value).toEqual('value'))
 })
 
 test('works without timeout', () => {
-  let p = new Promise(resolve => resolve('value'))
+  var p = new MyPromise(resolve => resolve('value'))
   p.then(value => {
     expect(value).toEqual('value')
   })
 })
+
+test(
+  'chainable directly',
+  new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
+    .then(value => {
+      expect(value).toEqual('value')
+      return 'first then'
+    })
+    .then(value => {
+      expect(value).toEqual('first then')
+      return 'second then'
+    })
+)
