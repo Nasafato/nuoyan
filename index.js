@@ -44,17 +44,17 @@ function expect(value) {
 
 function test(name, callback) {
   console.log('Test: ' + name)
-  if (callback.then) {
-    callback.then(v => {
+  try {
+    const result = callback()
+    if (result && result.then) {
+      result.then(() => {
+        console.log('\tSucceeded!')
+      })
+    } else {
       console.log('\tSucceeded!')
-    })
-  } else {
-    try {
-      callback()
-      console.log('\tSucceeded!')
-    } catch (e) {
-      console.log(e)
     }
+  } catch (e) {
+    console.log(e)
   }
 }
 
@@ -72,8 +72,7 @@ test('works without timeout', () => {
   })
 })
 
-test(
-  'chainable directly',
+test('chainable directly', () =>
   new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
     .then(value => {
       expect(value).toEqual('value')
@@ -82,5 +81,4 @@ test(
     .then(value => {
       expect(value).toEqual('first then')
       return 'second then'
-    })
-)
+    }))
