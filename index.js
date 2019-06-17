@@ -4,70 +4,58 @@ var states = {
   REJECTED: 3,
 }
 
+function createThen(callbacks, onFulfilled, onRejected) {
+  let newResolve, newReject
+  const newPromise = new MyPromise((resolve, reject) => {
+    newResolve = resolve
+    newReject = reject
+  })
+
+  callbacks.push({
+    onFulfilled(value) {
+      onFulfilled(value)
+      newResolve(value)
+    },
+    onRejected(reason) {
+      onRejected(reason)
+      newReject(reason)
+    },
+  })
+  return newPromise
+}
+
 function MyPromise(executor) {
-  var state = states.PENDING
-  var value = undefined
-  var resolveCallback = undefined
-  var rejectCallback = undefined
-  function resolve(fulfilledValue) {
-    value = fulfilledValue
+  let state = states.PENDING
+  let value = undefined
+  let reason = undefined
+  const callbacks = []
+
+  const resolve = value => {
+    if (state !== states.PENDING) return
+
     state = states.FULFILLED
-    if (resolveCallback) resolveCallback(value)
+    value = value
+    while (callbacks.length > 0) {
+      const callback = callbacks.pop()
+      try {
+        callback.onFulfilled(value)
+      } catch (e) {
+        callback.onRejected(e)
+      }
+    }
   }
-  function reject(reason) {
-    value = reason
-    state = states.REJECTED
-    if (rejectCallback) rejectCallback(value)
-  }
+  const reject = () => {}
   executor(resolve, reject)
 
-  function then(givenResolve, givenReject) {
-    return new MyPromise((newResolve, newReject) => {
-      if (state === states.FULFILLED) {
-        newResolve(givenResolve(value))
-      } else if (state === states.REJECTED) {
-        if (givenReject) newReject(givenReject(value))
-      } else {
-        resolveCallback = function resolveCallback(fulfilledValue) {
-          newResolve(givenResolve(fulfilledValue))
-        }
-        if (givenReject)
-          rejectCallback = function rejectCallback(reason) {
-            newReject(givenReject(reason))
-          }
-      }
-    })
+  function then(onFulfilled, onRejected) {
+    return createThen(callbacks, onFulfilled, onRejected)
   }
 
   return {
-    then,
     state,
-  }
-}
-
-function expect(value) {
-  return {
-    toEqual(targetValue) {
-      if (targetValue !== value) {
-        throw new Error(`Expected ${value} to equal ${targetValue}`)
-      }
-    },
-  }
-}
-
-function test(name, callback) {
-  console.log('Test: ' + name)
-  try {
-    const result = callback()
-    if (result && result.then) {
-      result.then(() => {
-        console.log('\tSucceeded!')
-      })
-    } else {
-      console.log('\tSucceeded!')
-    }
-  } catch (e) {
-    console.log(e)
+    value,
+    reason,
+    then,
   }
 }
 
