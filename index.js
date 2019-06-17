@@ -1,27 +1,40 @@
 var states = {
   PENDING: 1,
   FULFILLED: 2,
+  REJECTED: 3,
 }
 
 function MyPromise(executor) {
   var state = states.PENDING
   var value = undefined
-  var callback = undefined
+  var resolveCallback = undefined
+  var rejectCallback = undefined
   function resolve(fulfilledValue) {
     value = fulfilledValue
     state = states.FULFILLED
-    if (callback) callback(value)
+    if (resolveCallback) resolveCallback(value)
   }
-  executor(resolve)
+  function reject(reason) {
+    value = reason
+    state = states.REJECTED
+    if (rejectCallback) rejectCallback(value)
+  }
+  executor(resolve, reject)
 
-  function then(givenCallback) {
-    return new MyPromise(newResolve => {
+  function then(givenResolve, givenReject) {
+    return new MyPromise((newResolve, newReject) => {
       if (state === states.FULFILLED) {
-        newResolve(givenCallback(value))
+        newResolve(givenResolve(value))
+      } else if (state === states.REJECTED) {
+        if (givenReject) newReject(givenReject(value))
       } else {
-        callback = function chainedCallback(fulfilledValue) {
-          newResolve(givenCallback(fulfilledValue))
+        resolveCallback = function resolveCallback(fulfilledValue) {
+          newResolve(givenResolve(fulfilledValue))
         }
+        if (givenReject)
+          rejectCallback = function rejectCallback(reason) {
+            newReject(givenReject(reason))
+          }
       }
     })
   }
@@ -58,27 +71,4 @@ function test(name, callback) {
   }
 }
 
-function xtest() {}
-
-test('works with timeout', () => {
-  var p = new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
-  p.then(value => expect(value).toEqual('value'))
-})
-
-test('works without timeout', () => {
-  var p = new MyPromise(resolve => resolve('value'))
-  p.then(value => {
-    expect(value).toEqual('value')
-  })
-})
-
-test('chainable directly', () =>
-  new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
-    .then(value => {
-      expect(value).toEqual('value')
-      return 'first then'
-    })
-    .then(value => {
-      expect(value).toEqual('first then')
-      return 'second then'
-    }))
+export default MyPromise
