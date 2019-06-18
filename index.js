@@ -50,12 +50,7 @@ function MyPromise(executor) {
 
   function then(onFulfilled, onRejected) {
     // then.6 if promise is fulfilled/rejected, execute callbacks
-    const [callbackObj, newPromise] = createThen(
-      onFulfilled,
-      onRejected,
-      state,
-      callbacks
-    )
+    const [callbackObj, newPromise] = createThen(onFulfilled, onRejected)
     if (state === states.FULFILLED) {
       callbackObj.onFulfilled.call(undefined, values.value)
     } else if (state === states.REJECTED) {
@@ -173,7 +168,7 @@ function isObject(value) {
 }
 
 function isFunction(value) {
-  return typeof value !== 'function'
+  return typeof value === 'function'
 }
 
 export default MyPromise
