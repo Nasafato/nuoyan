@@ -9,8 +9,13 @@ function MyPromise(executor) {
   let values = {}
   const callbacks = []
 
+  let resolveCalled = false
+  let rejectCalled = false
+
   const resolve = value => {
     if (state !== states.PENDING) return
+    if (resolveCalled || rejectCalled) return
+    resolveCalled = true
 
     state = states.FULFILLED
     values.value = value
@@ -29,6 +34,8 @@ function MyPromise(executor) {
   }
   const reject = reason => {
     if (state !== states.PENDING) return
+    if (resolveCalled || rejectCalled) return
+    rejectCalled = true
 
     state = states.REJECTED
     values.reason = reason
@@ -83,18 +90,25 @@ function createThen(onFulfilled, onRejected) {
   const callbackObj = {
     onFulfilled: function wrappedOnFulfilled(value) {
       // then.1 both onFulfilled and onRejected are optional arguments
-      if (typeof onFulfilled !== 'function') {
+      if (!isFunction(onFulfilled)) {
         // then.7.ii if onFulfilled is not a function and promise is fulfilled, resolve
         // with value
         newResolve(value)
         return
       }
-      try {
-        const value = onFulfilled(value)
-        doResolve(newResolve, newReject, value)
-      } catch (e) {
-        newReject(e)
-      }
+      setTimeout(() => {
+        try {
+          console.log('value is', value)
+
+          const retValue = onFulfilled(value)
+          console.log('retValue is', retValue)
+          doResolve(newResolve, newReject, retValue)
+        } catch (e) {
+          console.log(e)
+
+          newReject(e)
+        }
+      })
     },
     onRejected: function wrappedOnRejected(reason) {
       // then.1 both onFulfilled and onRejected are optional arguments
@@ -104,12 +118,14 @@ function createThen(onFulfilled, onRejected) {
         newReject(reason)
         return
       }
-      try {
-        const value = onRejected(reason)
-        doResolve(newResolve, newReject, value)
-      } catch (e) {
-        newReject(e)
-      }
+      setTimeout(() => {
+        try {
+          const value = onRejected(reason)
+          doResolve(newResolve, newReject, value)
+        } catch (e) {
+          newReject(e)
+        }
+      })
     },
   }
 
@@ -171,4 +187,4 @@ function isFunction(value) {
   return typeof value === 'function'
 }
 
-export default MyPromise
+module.exports = MyPromise

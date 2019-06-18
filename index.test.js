@@ -1,4 +1,5 @@
 import MyPromise from './index'
+import adapter from './adapter'
 
 // https://github.com/promises-aplus/promises-tests/blob/master/lib/tests/2.1.2.js
 
@@ -83,7 +84,7 @@ describe('when fulfilled, a promise must not transition to another state', () =>
   })
 })
 
-describe.skip('old tests', () => {
+describe('old tests', () => {
   test('works with timeout', () => {
     var p = new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
     p.then(value => expect(value).toEqual('value'))
@@ -118,4 +119,47 @@ describe.skip('old tests', () => {
         expect(reason).toEqual('reason')
       }
     ))
+})
+
+var dummy = { dummy: 'dummy' } // we fulfill or reject with this when we don't intend to test against it
+var other = { other: 'other' } // a value we don't want to be strict equal to
+var sentinel = { sentinel: 'sentinel' } // a sentinel fulfillment value to test for with strict equality
+var sentinel2 = { sentinel2: 'sentinel2' }
+var sentinel3 = { sentinel3: 'sentinel3' }
+
+describe.only('their calls', () => {
+  test('immediately fulfilled', done => {
+    const handler1 = jest.fn(val => {
+      console.log('called with', val)
+
+      return other
+    })
+    const handler2 = jest.fn(() => other)
+    const handler3 = jest.fn(() => other)
+
+    const spy = jest.fn()
+    const d = adapter.deferred()
+    const promise = d.promise
+    promise.then(handler1, spy)
+    promise.then(handler2, spy)
+    promise.then(handler3, spy)
+
+    promise.then(function(value) {
+      console.log('calling', value)
+
+      try {
+        expect(value).toEqual(sentinel)
+        expect(handler1).toHaveBeenCalledWith(sentinel)
+        expect(handler2).toHaveBeenCalledWith(sentinel)
+        expect(handler3).toHaveBeenCalledWith(sentinel)
+        expect(spy).not.toHaveBeenCalled()
+      } catch (e) {
+        console.log(e)
+      }
+
+      console.log('here')
+      done()
+    })
+    d.resolve(sentinel)
+  })
 })

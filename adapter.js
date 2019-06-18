@@ -1,4 +1,4 @@
-const MyPromise = require('./index').default
+const MyPromise = require('./index')
 
 function Adapter() {
   this.deferred = function deferred() {
@@ -27,4 +27,5 @@ function Adapter() {
   }.bind(this)
 }
 
-global.adapter = new Adapter()
+// global.adapter = new Adapter()
+module.exports = new Adapter()
