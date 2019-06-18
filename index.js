@@ -6,15 +6,14 @@ var states = {
 
 function MyPromise(executor) {
   let state = states.PENDING
-  let value = undefined
-  let reason = undefined
+  let values = {}
   const callbacks = []
 
   const resolve = value => {
     if (state !== states.PENDING) return
 
     state = states.FULFILLED
-    value = value
+    values.value = value
     // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
     // or onRejected callbacks in order of calls
     while (callbacks.length > 0) {
@@ -28,7 +27,25 @@ function MyPromise(executor) {
       }
     }
   }
-  const reject = () => {}
+  const reject = reason => {
+    if (state !== states.PENDING) return
+
+    state = states.REJECTED
+    values.reason = reason
+    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
+    // or onRejected callbacks in order of calls
+    while (callbacks.length > 0) {
+      const callback = callbacks.pop()
+      const { onRejected } = callback
+      try {
+        // then.5 must be called as functions
+        onRejected(reason)
+      } catch (e) {
+        onRejected(e)
+      }
+    }
+  }
+
   executor(resolve, reject)
 
   function then(onFulfilled, onRejected) {
@@ -40,10 +57,10 @@ function MyPromise(executor) {
       callbacks
     )
     if (state === states.FULFILLED) {
-      callbackObj.onFulfilled.call(undefined, value)
+      callbackObj.onFulfilled.call(undefined, values.value)
     } else if (state === states.REJECTED) {
       // then.5 must be called as functions
-      callbackObj.onRejected.call(undefined, reason)
+      callbackObj.onRejected.call(undefined, values.reason)
     } else {
       // then.5 must be called as functions
       callbacks.push(callbackObj)
@@ -55,8 +72,8 @@ function MyPromise(executor) {
 
   return {
     state,
-    value,
-    reason,
+    value: values.value,
+    reason: values.reason,
     then,
   }
 }
@@ -104,13 +121,20 @@ function createThen(onFulfilled, onRejected) {
   return [callbackObj, newPromise]
 }
 
+/**
+ * doResolve runs the Promise Resolution Procedure (PRP) detailed in the spec.
+ *
+ * @param {function} resolve - fulfills the Promise with a certain value
+ * @param {function} reject - rejects the Promise with a certain reason
+ * @param {*} value - any value
+ */
 function doResolve(resolve, reject, value) {
   if (value instanceof MyPromise) {
     value.then(val => resolve(val), reason => reject(reason))
     return
   }
 
-  if (typeof value !== 'object' && typeof value !== 'function') {
+  if (!isObject(value) && !isFunction(value)) {
     resolve(value)
     return
   }
@@ -118,27 +142,38 @@ function doResolve(resolve, reject, value) {
   let resolvePromiseCalled = false
   let rejectPromiseCalled = false
 
+  function resolvePromise(val) {
+    if (resolvePromiseCalled || rejectPromiseCalled) return
+    resolvePromiseCalled = true
+    doResolve(resolve, reject, val)
+  }
+
+  function rejectPromise(r) {
+    if (resolvePromiseCalled || rejectPromiseCalled) return
+    rejectPromiseCalled = true
+    reject(r)
+  }
+
   try {
     const then = value.then
-    if (typeof then !== 'function') {
+    if (!isFunction(then)) {
       resolve(value)
       return
     }
-    function resolvePromise(val) {
-      if (resolvePromiseCalled || rejectPromiseCalled) return
-      resolvePromiseCalled = true
-      doResolve(resolve, reject, val)
-    }
-    function rejectPromise(r) {
-      if (resolvePromiseCalled || rejectPromiseCalled) return
-      rejectPromiseCalled = true
-      reject(r)
-    }
+
     then.call(value, resolvePromise, rejectPromise)
   } catch (e) {
     if (resolvePromiseCalled || rejectPromiseCalled) return
     reject(e)
   }
+}
+
+function isObject(value) {
+  return typeof value === 'object'
+}
+
+function isFunction(value) {
+  return typeof value !== 'function'
 }
 
 export default MyPromise
