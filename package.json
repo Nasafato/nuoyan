@@ -15,6 +15,7 @@
     "promises-aplus-tests": "2.1.2"
   },
   "scripts": {
-    "compliance": "yarn promises-aplus-tests adapter.js --require @babel/register > test-errors.log"
+    "compliance-log": "yarn promises-aplus-tests adapter.js > test-errors.log",
+    "compliance": "yarn promises-aplus-tests adapter.js"
   }
 }

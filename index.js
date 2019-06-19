@@ -5,78 +5,67 @@ var states = {
 }
 
 function MyPromise(executor) {
-  let state = states.PENDING
-  let values = {}
-  const callbacks = []
+  this.state = states.PENDING
+  this.callbacks = []
+  this.alreadyBroadcasted = false
 
-  let resolveCalled = false
-  let rejectCalled = false
-
-  const resolve = value => {
-    if (state !== states.PENDING) return
-    if (resolveCalled || rejectCalled) return
-    resolveCalled = true
-
-    state = states.FULFILLED
-    values.value = value
-    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
-    // or onRejected callbacks in order of calls
-    while (callbacks.length > 0) {
-      const callback = callbacks.pop()
+  this.broadcast = function broadcast() {
+    this.callbacks.forEach(callback => {
       const { onFulfilled, onRejected } = callback
       try {
-        // then.5 must be called as functions
-        onFulfilled(value)
+        if (this.state === states.FULFILLED) onFulfilled(this.value)
+        else if (this.state === states.REJECTED) onRejected(this.reason)
       } catch (e) {
         onRejected(e)
       }
-    }
-  }
-  const reject = reason => {
-    if (state !== states.PENDING) return
-    if (resolveCalled || rejectCalled) return
-    rejectCalled = true
+    })
+  }.bind(this)
 
-    state = states.REJECTED
-    values.reason = reason
+  const resolve = value => {
+    if (this.state !== states.PENDING) return
+    if (this.alreadyBroadcasted) return
+    this.alreadyBroadcasted = true
+    this.state = states.FULFILLED
+    this.value = value
     // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
     // or onRejected callbacks in order of calls
-    while (callbacks.length > 0) {
-      const callback = callbacks.pop()
-      const { onRejected } = callback
-      try {
-        // then.5 must be called as functions
-        onRejected(reason)
-      } catch (e) {
-        onRejected(e)
-      }
-    }
+    this.broadcast()
+  }
+  const reject = reason => {
+    if (this.state !== states.PENDING) return
+    if (this.alreadyBroadcasted) return
+    this.alreadyBroadcasted = true
+    this.state = states.REJECTED
+    this.reason = reason
+    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
+    // or onRejected callbacks in order of calls
+    this.broadcast()
   }
 
   executor(resolve, reject)
 
-  function then(onFulfilled, onRejected) {
+  this.then = function then(onFulfilled, onRejected) {
     // then.6 if promise is fulfilled/rejected, execute callbacks
     const [callbackObj, newPromise] = createThen(onFulfilled, onRejected)
-    if (state === states.FULFILLED) {
-      callbackObj.onFulfilled.call(undefined, values.value)
-    } else if (state === states.REJECTED) {
+    if (this.state === states.FULFILLED) {
+      callbackObj.onFulfilled.call(undefined, this.value)
+    } else if (this.state === states.REJECTED) {
       // then.5 must be called as functions
-      callbackObj.onRejected.call(undefined, values.reason)
+      callbackObj.onRejected.call(undefined, this.reason)
     } else {
       // then.5 must be called as functions
-      callbacks.push(callbackObj)
+      this.callbacks.push(callbackObj)
     }
 
     // then.7 must return a promise
     return newPromise
-  }
+  }.bind(this)
 
   return {
-    state,
-    value: values.value,
-    reason: values.reason,
-    then,
+    state: this.state,
+    value: this.value,
+    reason: this.reason,
+    then: this.then,
   }
 }
 
@@ -98,14 +87,9 @@ function createThen(onFulfilled, onRejected) {
       }
       setTimeout(() => {
         try {
-          console.log('value is', value)
-
           const retValue = onFulfilled(value)
-          console.log('retValue is', retValue)
           doResolve(newResolve, newReject, retValue)
         } catch (e) {
-          console.log(e)
-
           newReject(e)
         }
       })
