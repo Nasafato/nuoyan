@@ -5,78 +5,73 @@ var states = {
 }
 
 function MyPromise(executor) {
-  this.state = states.PENDING
-  this.callbacks = []
-  this.alreadyBroadcasted = false
+  var state = states.PENDING
+  var callbacks = []
+  var alreadyBroadcasted = false
+  var value, reason
 
-  this.broadcast = function broadcast() {
-    this.callbacks.forEach(callback => {
-      const { onFulfilled, onRejected } = callback
+  function broadcast() {
+    callbacks.forEach(function(callback) {
+      var { onFulfilled, onRejected } = callback
       try {
-        if (this.state === states.FULFILLED) onFulfilled(this.value)
-        else if (this.state === states.REJECTED) onRejected(this.reason)
+        if (state === states.FULFILLED) onFulfilled(value)
+        else if (state === states.REJECTED) onRejected(reason)
       } catch (e) {
         onRejected(e)
       }
     })
-  }.bind(this)
-
-  const resolve = value => {
-    if (this.state !== states.PENDING) return
-    if (this.alreadyBroadcasted) return
-    this.alreadyBroadcasted = true
-    this.state = states.FULFILLED
-    this.value = value
-    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
-    // or onRejected callbacks in order of calls
-    this.broadcast()
   }
-  const reject = reason => {
-    if (this.state !== states.PENDING) return
-    if (this.alreadyBroadcasted) return
-    this.alreadyBroadcasted = true
-    this.state = states.REJECTED
-    this.reason = reason
+
+  var resolve = function(valueToResolve) {
+    if (state !== states.PENDING) return
+    if (alreadyBroadcasted) return
+    alreadyBroadcasted = true
+    state = states.FULFILLED
+    value = valueToResolve
     // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
     // or onRejected callbacks in order of calls
-    this.broadcast()
+    broadcast()
+  }
+
+  var reject = function(reasonToGive) {
+    if (state !== states.PENDING) return
+    if (alreadyBroadcasted) return
+    alreadyBroadcasted = true
+    state = states.REJECTED
+    reason = reasonToGive
+    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
+    // or onRejected callbacks in order of calls
+    broadcast()
   }
 
   executor(resolve, reject)
 
   this.then = function then(onFulfilled, onRejected) {
     // then.6 if promise is fulfilled/rejected, execute callbacks
-    const [callbackObj, newPromise] = createThen(onFulfilled, onRejected)
-    if (this.state === states.FULFILLED) {
-      callbackObj.onFulfilled.call(undefined, this.value)
-    } else if (this.state === states.REJECTED) {
+    var [callbackObj, newPromise] = createThen(onFulfilled, onRejected)
+    if (state === states.FULFILLED) {
+      callbackObj.onFulfilled.call(undefined, value)
+    } else if (state === states.REJECTED) {
       // then.5 must be called as functions
-      callbackObj.onRejected.call(undefined, this.reason)
+      callbackObj.onRejected.call(undefined, reason)
     } else {
       // then.5 must be called as functions
-      this.callbacks.push(callbackObj)
+      callbacks.push(callbackObj)
     }
 
     // then.7 must return a promise
     return newPromise
-  }.bind(this)
-
-  return {
-    state: this.state,
-    value: this.value,
-    reason: this.reason,
-    then: this.then,
   }
 }
 
 function createThen(onFulfilled, onRejected) {
-  let newResolve, newReject
-  const newPromise = new MyPromise((resolve, reject) => {
+  var newResolve, newReject
+  var newPromise = new MyPromise(function executor(resolve, reject) {
     newResolve = resolve
     newReject = reject
   })
 
-  const callbackObj = {
+  var callbackObj = {
     onFulfilled: function wrappedOnFulfilled(value) {
       // then.1 both onFulfilled and onRejected are optional arguments
       if (!isFunction(onFulfilled)) {
@@ -85,9 +80,9 @@ function createThen(onFulfilled, onRejected) {
         newResolve(value)
         return
       }
-      setTimeout(() => {
+      setTimeout(function() {
         try {
-          const retValue = onFulfilled(value)
+          var retValue = onFulfilled(value)
           doResolve(newResolve, newReject, retValue)
         } catch (e) {
           newReject(e)
@@ -96,15 +91,15 @@ function createThen(onFulfilled, onRejected) {
     },
     onRejected: function wrappedOnRejected(reason) {
       // then.1 both onFulfilled and onRejected are optional arguments
-      if (typeof onRejected !== 'function') {
+      if (!isFunction(onFulfilled)) {
         // then.7.iii if onRejected is not a function and promise is rejected, reject
         // with reason
         newReject(reason)
         return
       }
-      setTimeout(() => {
+      setTimeout(function() {
         try {
-          const value = onRejected(reason)
+          var value = onRejected(reason)
           doResolve(newResolve, newReject, value)
         } catch (e) {
           newReject(e)
@@ -115,7 +110,6 @@ function createThen(onFulfilled, onRejected) {
 
   return [callbackObj, newPromise]
 }
-
 /**
  * doResolve runs the Promise Resolution Procedure (PRP) detailed in the spec.
  *
@@ -124,47 +118,70 @@ function createThen(onFulfilled, onRejected) {
  * @param {*} value - any value
  */
 function doResolve(resolve, reject, value) {
-  if (value instanceof MyPromise) {
-    value.then(val => resolve(val), reason => reject(reason))
+  if (this === value) {
+    reject(new TypeError())
     return
   }
 
+  // 3.2
+  if (value instanceof MyPromise) {
+    // 3.2.i
+    value.then(
+      // 3.2.ii
+      function(val) { resolve(val)},
+      // 3.2.iii
+      function(reason) {reject(reason)}
+    )
+    return
+  }
+
+  // 3.4
   if (!isObject(value) && !isFunction(value)) {
     resolve(value)
     return
   }
 
-  let resolvePromiseCalled = false
-  let rejectPromiseCalled = false
-
-  function resolvePromise(val) {
-    if (resolvePromiseCalled || rejectPromiseCalled) return
-    resolvePromiseCalled = true
-    doResolve(resolve, reject, val)
-  }
-
-  function rejectPromise(r) {
-    if (resolvePromiseCalled || rejectPromiseCalled) return
-    rejectPromiseCalled = true
-    reject(r)
-  }
+  // 3.3
+  var resolvePromiseCalled = false
+  var rejectPromiseCalled = false
 
   try {
-    const then = value.then
+    // 3.3.i
+    var then = value.then
+    // 3.3.iv
     if (!isFunction(then)) {
       resolve(value)
       return
     }
 
-    then.call(value, resolvePromise, rejectPromise)
+    // 3.3.iii
+    then.call(
+      value,
+      function resolvePromise(val) {
+        // 3.3.iii.c
+        if (resolvePromiseCalled || rejectPromiseCalled) return
+        resolvePromiseCalled = true
+        // 3.3.iii.a
+        doResolve(resolve, reject, val)
+      },
+      function rejectPromise(r) {
+        // 3.3.iii.c
+        if (resolvePromiseCalled || rejectPromiseCalled) return
+        rejectPromiseCalled = true
+        // 3.3.iii.b
+        reject(r)
+      }
+    )
   } catch (e) {
+    // 3.3.iii.d
     if (resolvePromiseCalled || rejectPromiseCalled) return
+    // 3.3.ii
     reject(e)
   }
 }
 
 function isObject(value) {
-  return typeof value === 'object'
+  return value !== null && typeof value === 'object'
 }
 
 function isFunction(value) {

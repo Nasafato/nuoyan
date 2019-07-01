@@ -97,8 +97,8 @@ describe('old tests', () => {
     })
   })
 
-  test('chainable directly', () =>
-    new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
+  test('chainable directly', () => {
+    const promise = new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
       .then(value => {
         expect(value).toEqual('value')
         return 'first then'
@@ -106,7 +106,10 @@ describe('old tests', () => {
       .then(value => {
         expect(value).toEqual('first then')
         return 'second then'
-      }))
+      })
+    return promise;
+  })
+
 
   test.skip('then reject works', () =>
     new MyPromise((resolve, reject) =>
@@ -127,10 +130,9 @@ var sentinel = { sentinel: 'sentinel' } // a sentinel fulfillment value to test 
 var sentinel2 = { sentinel2: 'sentinel2' }
 var sentinel3 = { sentinel3: 'sentinel3' }
 
-describe.only('their calls', () => {
+describe('their calls', () => {
   test('immediately fulfilled', done => {
     const handler1 = jest.fn(val => {
-      console.log('called with', val)
 
       return other
     })
@@ -145,7 +147,6 @@ describe.only('their calls', () => {
     promise.then(handler3, spy)
 
     promise.then(function(value) {
-      console.log('calling', value)
 
       try {
         expect(value).toEqual(sentinel)
@@ -154,10 +155,8 @@ describe.only('their calls', () => {
         expect(handler3).toHaveBeenCalledWith(sentinel)
         expect(spy).not.toHaveBeenCalled()
       } catch (e) {
-        console.log(e)
       }
 
-      console.log('here')
       done()
     })
     d.resolve(sentinel)
