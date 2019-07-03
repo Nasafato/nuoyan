@@ -7,52 +7,34 @@ var states = {
 function MyPromise(executor) {
   var state = states.PENDING
   var callbacks = []
-  var alreadyBroadcasted = false
   var value = undefined
   var reason = undefined
 
   function resolve(valueToResolve) {
+    // 2.2.iii - onFulfilled must not be called more than once
     if (state !== states.PENDING) return
-    if (alreadyBroadcasted) return
-    alreadyBroadcasted = true
     state = states.FULFILLED
     value = valueToResolve
-    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
-    // or onRejected callbacks in order of calls
     broadcast()
   }
 
   function reject(reasonToGive) {
+    // 2.3.iii - onRejected must not be called more than once
     if (state !== states.PENDING) return
-    if (alreadyBroadcasted) return
-    alreadyBroadcasted = true
     state = states.REJECTED
     reason = reasonToGive
-    // then.6 - when a promise is fulfilled or rejected, execute onFulfilled callbacks
-    // or onRejected callbacks in order of calls
     broadcast()
   }
 
   function broadcast() {
     callbacks.forEach(function(callbackInterface) {
       var promise2Interface = callbackInterface.promiseInterface
-      var onFulfilled = callbackInterface.onFulfilled
-      var onRejected = callbackInterface.onRejected
       var promise1Interface = {
         value,
         reason,
         state,
       }
-      // 2.4 - must not be called until execution context stack contains only
-      // platform code
-      setTimeout(function() {
-        // 2.2.2.i - must be called after promise fulfilled
-        if (state === states.FULFILLED)
-          doResolve(promise1Interface, promise2Interface, onFulfilled)
-        // 2.2.3.i - must be called after promise rejected
-        else if (state === states.REJECTED)
-          doReject(promise1Interface, promise2Interface, onRejected)
-      })
+      runCallbacks(promise1Interface, promise2Interface, callbackInterface)
     })
   }
 
@@ -63,28 +45,13 @@ function MyPromise(executor) {
       onFulfilled: onFulfilled,
       onRejected: onRejected,
     }
-    if (state === states.FULFILLED || state === states.REJECTED) {
+    if (state !== states.PENDING) {
       var promise1Interface = {
-        value,
-        reason,
-        state,
+        value: value,
+        reason: reason,
+        state: state,
       }
-      setTimeout(function() {
-        // 2.2.2.i - must be called after promise fulfilled
-        if (state === states.FULFILLED)
-          doResolve(
-            promise1Interface,
-            promise2Interface,
-            callbackInterface.onFulfilled
-          )
-        // 2.2.3.i - must be called after promise rejected
-        else if (state === states.REJECTED)
-          doReject(
-            promise1Interface,
-            promise2Interface,
-            callbackInterface.onRejected
-          )
-      })
+      runCallbacks(promise1Interface, promise2Interface, callbackInterface)
     } else {
       callbacks.push(callbackInterface)
     }
@@ -95,6 +62,39 @@ function MyPromise(executor) {
   executor(resolve, reject)
 }
 
+function runCallbacks(
+  basePromiseInterface,
+  returnedPromiseInterface,
+  callbacks
+) {
+  // 2.4 - must not be called until execution context stack contains only
+  // platform code
+  setTimeout(function() {
+    // 2.2.2.i - must be called after promise fulfilled
+    if (basePromiseInterface.state === states.FULFILLED)
+      doResolve(
+        basePromiseInterface,
+        returnedPromiseInterface,
+        callbacks.onFulfilled
+      )
+    // 2.2.3.i - must be called after promise rejected
+    else if (basePromiseInterface.state === states.REJECTED)
+      doReject(
+        basePromiseInterface,
+        returnedPromiseInterface,
+        callbacks.onRejected
+      )
+  })
+}
+
+/**
+ * Creates a promise and wraps it with an interface containing methods for
+ * resolving or rejecting the promise.
+ *
+ * Used inside the `promiseResolutionProcedure` function.
+ *
+ * @returns {object} promiseInterface
+ */
 function createPromise() {
   var resolve, reject
   var newPromise = new MyPromise(function executor(
@@ -108,57 +108,68 @@ function createPromise() {
   return { promise: newPromise, fulfill: resolve, reject: reject }
 }
 
-/*
- * Why do we need this again?
+/**
+ * Resolves the value of promise 2, given the onFulfilled from calling
+ * `promise1.then()`
+ *
+ * @param {object} promise1Interface
+ * @param {object} promise2Interface
+ * @param {any} onFulfilled
  */
-
 function doResolve(promise1Interface, promise2Interface, onFulfilled) {
+  // 2.1.i - if onFulfilled is not a function, it must be ignored
   if (!isFunction(onFulfilled)) {
     promise2Interface.fulfill(promise1Interface.value)
     return
   }
   try {
     var retVal = onFulfilled(promise1Interface.value)
-    prp(promise2Interface, retVal)
+    promiseResolutionProcedure(promise2Interface, retVal)
   } catch (e) {
     promise2Interface.reject(e)
   }
 }
 
-/*
- * Why do we need this again?
+/**
+ * Resolves the value of promise 2, given the onRejected from calling
+ * `promise1.then()`
+ *
+ * @param {object} promise1Interface
+ * @param {object} promise2Interface
+ * @param {any} onRejected
  */
-
 function doReject(promise1Interface, promise2Interface, onRejected) {
+  // 2.1.ii - if onRejected is not a function, it must be ignored
   if (!isFunction(onRejected)) {
     promise2Interface.reject(promise1Interface.reason)
     return
   }
   try {
     var retVal = onRejected(promise1Interface.reason)
-    prp(promise2Interface, retVal)
+    promiseResolutionProcedure(promise2Interface, retVal)
   } catch (e) {
     promise2Interface.reject(e)
   }
 }
 
-function prp(promiseInterface, value) {
+/**
+ * Runs the promise resolution procedure on a promise and some value.
+ *
+ * @param {object} promiseInterface
+ * @param {any} value
+ */
+function promiseResolutionProcedure(promiseInterface, value) {
+  // 3.1 if equal, reject with TypeError
   if (promiseInterface.promise === value) {
-    // 3.1 if equal, reject with TypeError
     promiseInterface.reject(new TypeError())
     return
   }
 
+  // 3.2 if value is a Promise, adopt its state
   if (value instanceof MyPromise) {
-    // 3.2 if value is a Promise, adopt its state
     value.then(
       function resolve(resolvedValue) {
-        // This shouldn't be a thenable
-        // Actually, I think it's fine if this is a thenable.
-        // It's more like we need to resolve it again.
-        prp(promiseInterface, resolvedValue)
-        // console.log(resolvedValue)
-        // promiseInterface.fulfill(resolvedValue)
+        promiseResolutionProcedure(promiseInterface, resolvedValue)
       },
       function reject(reason) {
         promiseInterface.reject(reason)
@@ -167,8 +178,8 @@ function prp(promiseInterface, value) {
     return
   }
 
+  // 3.4 if not an object or function, fulfill promise with value
   if (!isObject(value) && !isFunction(value)) {
-    // 3.4 if not an object or function, fulfill promise with value
     promiseInterface.fulfill(value)
     return
   }
@@ -182,8 +193,8 @@ function prp(promiseInterface, value) {
     return
   }
 
+  // 3.3.4 - if then is not a function, fulfill promise with value
   if (!isFunction(then)) {
-    // 3.3.4 - if then is not a function, fulfill promise with value
     promiseInterface.fulfill(value)
     return
   }
@@ -197,7 +208,7 @@ function prp(promiseInterface, value) {
         // ignore others
         if (promiseNoLongerPending) return
         promiseNoLongerPending = true
-        prp(promiseInterface, y)
+        promiseResolutionProcedure(promiseInterface, y)
       },
       function rejectPromise(r) {
         if (promiseNoLongerPending) return

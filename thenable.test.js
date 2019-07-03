@@ -9,52 +9,6 @@ const sentinel = { sentinel: 'sentinel' } // a sentinel fulfillment value to tes
 jest.setTimeout(200)
 
 describe('is a thenable for a thenable `y` is an already-fulfilled promise for a synchronously-fulfilled custom thenable `then` calls `resolvePromise` synchronously via return from a fulfilled promise:', () => {
-  var outerStringRepresentation = 'an already-fulfilled promise'
-  var outerThenableFactory = function(value) {
-    return resolved(value)
-  }
-  var innerStringRepresentation = 'a synchronously-fulfilled custom thenable'
-  var innerThenableFactory = function(value) {
-    return {
-      then: function(onFulfilled) {
-        onFulfilled(value)
-      },
-    }
-  }
-
-  function yFactory() {
-    // :100outerThenableFactory(innerThenableFactory(sentinel))
-    // innerThenableFactory(sentinel)
-    var innerThenable = {
-      then: function(onFulfilled) {
-        onFulfilled(sentinel)
-      },
-    }
-    var outerThenable = resolved(innerThenable)
-    // So the outer thenable returns an innerThenable that immediately fulfills
-  }
-  var yThenable = resolved({
-    then: onFulfilled => {
-      onFulfilled(sentinel)
-    },
-  })
-
-  // testCallingResolvePromiseFulfillsWith(
-  //   yFactory,
-  //   stringRepresentation,
-  //   sentinel
-  // )
-  const xFactory = () => ({
-    then: function(resolvePromise) {
-      resolvePromise(yThenable)
-    },
-  })
-  function spec(promise, done) {
-    promise.then(value => {
-      expect(value).toBe(fulfillmentValue)
-      done()
-    })
-  }
   const fulfillmentValue = sentinel
   test('via reutrn from a fulfilled promise', done => {
     // So we have a resolved promise
@@ -79,13 +33,12 @@ describe('is a thenable for a thenable `y` is an already-fulfilled promise for a
     // Promise1 is fulfilled with
     // Actually, the reason is obvious, it's because I'm fulfilling the promise
     // with its executor's resolve function instead of doing the PRP on it.
-    // If the value is an instance of a Promise, then... 
+    // If the value is an instance of a Promise, then...
     // Actually, this means there's something wrong with my `then()` code if
     // the onFulfilled function isn't being resolved with the right
     //
     // The main problem is that a Promise is being fulfilled with a value, when the PRP should have run on that value and resolved it with an actual value
     const promise2 = promise.then(value => {
-      console.log(value, fulfillmentValue)
       expect(value).toBe(fulfillmentValue)
       done()
     })
