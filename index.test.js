@@ -99,15 +99,17 @@ describe('old tests', () => {
 
   test('chainable directly', () => {
     const promise = new MyPromise(resolve => setTimeout(() => resolve('value'), 300))
+    const promise2 = promise
       .then(value => {
         expect(value).toEqual('value')
         return 'first then'
       })
+    const promise3 = promise2
       .then(value => {
         expect(value).toEqual('first then')
         return 'second then'
       })
-    return promise;
+    return promise3;
   })
 
 
@@ -147,7 +149,6 @@ describe('their calls', () => {
     promise.then(handler3, spy)
 
     promise.then(function(value) {
-
       try {
         expect(value).toEqual(sentinel)
         expect(handler1).toHaveBeenCalledWith(sentinel)
